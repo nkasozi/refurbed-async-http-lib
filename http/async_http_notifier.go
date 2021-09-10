@@ -7,6 +7,7 @@ import (
 )
 
 type AsyncHttpRequestSender interface {
+	ShutDown()
 	SendHttpRequestAsync(request AsyncHttpRequest) error
 }
 
@@ -16,12 +17,18 @@ type AsyncHttpRequest struct {
 	Body          io.Reader
 	Headers       map[string]string
 	ResultHandler func(resp *http.Response, err error)
+	wg            sync.WaitGroup
 }
 
 type AsyncHttpNotifier struct {
 	httpSender               HttpRequestSender
 	pendingHttpRequestsQueue chan AsyncHttpRequest
 	numberOfWorkerRoutines   int
+	wg                       sync.WaitGroup
+}
+
+func (a *AsyncHttpNotifier) ShutDown() {
+	close(a.pendingHttpRequestsQueue)
 }
 
 func NewAsyncHttpNotifier(sender HttpRequestSender, numberOfWorkerRoutines int) AsyncHttpRequestSender {
@@ -32,37 +39,36 @@ func NewAsyncHttpNotifier(sender HttpRequestSender, numberOfWorkerRoutines int) 
 		numberOfWorkerRoutines:   numberOfWorkerRoutines,
 	}
 
-	result.startMultiGoRoutineChannelProcessingLoop()
+	result.startChannelProcessingUsingMultipleGoRoutines()
 
 	return result
 }
 
-func (a *AsyncHttpNotifier) startMultiGoRoutineChannelProcessingLoop() {
-	var wg sync.WaitGroup
+func (a *AsyncHttpNotifier) startChannelProcessingUsingMultipleGoRoutines() {
+	go func() {
+		// This starts x number of goroutines that wait for something to do
+		a.wg.Add(a.numberOfWorkerRoutines)
 
-	// This starts x number of goroutines that wait for something to do
-	wg.Add(a.numberOfWorkerRoutines)
+		for i := 0; i < a.numberOfWorkerRoutines; i++ {
+			go func() {
+				for {
+					pendingRequest, ok := <-a.pendingHttpRequestsQueue
 
-	for i := 0; i < a.numberOfWorkerRoutines; i++ {
-		go func() {
-			for {
-				pendingRequest, ok := <-a.pendingHttpRequestsQueue
+					// if there is nothing to do and the channel has been closed then end the goroutine
+					if !ok {
+						a.wg.Done()
+						return
+					}
 
-				// if there is nothing to do and the channel has been closed then end the goroutine
-				if !ok {
-					wg.Done()
-					return
+					// process the pending request
+					a.processQueuedHttpRequestAsync(pendingRequest)
 				}
+			}()
+		}
 
-				// process the pending request
-				a.processQueuedHttpRequestAsync(pendingRequest)
-			}
-		}()
-	}
-
-	// Wait for the threads to finish
-	wg.Wait()
-
+		// Wait for the threads to finish
+		a.wg.Wait()
+	}()
 }
 
 func (a *AsyncHttpNotifier) SendHttpRequestAsync(request AsyncHttpRequest) (err error) {
