@@ -1,42 +1,35 @@
 package async_http
 
 import (
-	"io"
-	"net/http"
+	"github.com/nkasozi/refurbed-async-http-lib/http/models"
 	"sync"
 )
 
+//go:generate mockgen -destination=mocks/async_http_notifier_mock.go -package=mocks . AsyncHttpRequestSender
 type AsyncHttpRequestSender interface {
 	ShutDown()
-	SendHttpRequestAsync(request AsyncHttpRequest) error
-}
-
-type AsyncHttpRequest struct {
-	Method        string
-	Url           string
-	Body          io.Reader
-	Headers       map[string]string
-	ResultHandler func(resp *http.Response, err error)
-	wg            sync.WaitGroup
+	SendHttpRequestAsync(request models.AsyncHttpRequest) error
 }
 
 type AsyncHttpNotifier struct {
 	httpSender               HttpRequestSender
-	pendingHttpRequestsQueue chan AsyncHttpRequest
+	pendingHttpRequestsQueue chan models.AsyncHttpRequest
 	numberOfWorkerRoutines   int
 	wg                       sync.WaitGroup
+	url                      string
 }
 
 func (a *AsyncHttpNotifier) ShutDown() {
 	close(a.pendingHttpRequestsQueue)
 }
 
-func NewAsyncHttpNotifier(sender HttpRequestSender, numberOfWorkerRoutines int) AsyncHttpRequestSender {
+func NewAsyncHttpNotifier(url string, sender HttpRequestSender, numberOfWorkerRoutines int) AsyncHttpRequestSender {
 
 	result := &AsyncHttpNotifier{
 		httpSender:               sender,
-		pendingHttpRequestsQueue: make(chan AsyncHttpRequest, numberOfWorkerRoutines+1),
+		pendingHttpRequestsQueue: make(chan models.AsyncHttpRequest, numberOfWorkerRoutines+1),
 		numberOfWorkerRoutines:   numberOfWorkerRoutines,
+		url:                      url,
 	}
 
 	result.startChannelProcessingUsingMultipleGoRoutines()
@@ -71,7 +64,7 @@ func (a *AsyncHttpNotifier) startChannelProcessingUsingMultipleGoRoutines() {
 	}()
 }
 
-func (a *AsyncHttpNotifier) SendHttpRequestAsync(request AsyncHttpRequest) (err error) {
+func (a *AsyncHttpNotifier) SendHttpRequestAsync(request models.AsyncHttpRequest) (err error) {
 
 	err = validateHttpRequest(request)
 
@@ -85,8 +78,8 @@ func (a *AsyncHttpNotifier) SendHttpRequestAsync(request AsyncHttpRequest) (err 
 	return
 }
 
-func (a *AsyncHttpNotifier) processQueuedHttpRequestAsync(request AsyncHttpRequest) {
-	resp, err := a.httpSender.SendHttpRequest(request.Method, request.Url, request.Headers, request.Body)
+func (a *AsyncHttpNotifier) processQueuedHttpRequestAsync(request models.AsyncHttpRequest) {
+	resp, err := a.httpSender.SendHttpRequest(request.Method, a.url, request.Headers, request.Body)
 
 	//call the resp handler and pass the results
 	request.ResultHandler(resp, err)

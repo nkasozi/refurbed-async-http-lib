@@ -5,6 +5,7 @@ import (
 	"net/http"
 )
 
+//go:generate mockgen -destination=mocks/http_request_sender_mock.go -package=mocks . HttpRequestSender
 type HttpRequestSender interface {
 	SendHttpRequest(method, url string, headers map[string]string, body io.Reader) (resp *http.Response, err error)
 }
