@@ -10,6 +10,7 @@ import (
 func TestValidateHttpRequest(t *testing.T) {
 	t.Run("given a valid request, returns no error", func(t *testing.T) {
 		request := models.AsyncHttpRequest{
+			Url:     "http://test-url",
 			Body:    nil,
 			Headers: nil,
 			ResultHandler: func(resp *http.Response, err error) {

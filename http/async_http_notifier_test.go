@@ -13,12 +13,11 @@ import (
 func TestShutDown(t *testing.T) {
 	t.Run("given that we shutdown successfully, channels should be closed", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
-		url := "test-url"
 		httpReqSenderMock := mocks.NewMockHttpRequestSender(ctrl)
 
-		notifier := NewAsyncHttpNotifier(url, httpReqSenderMock, 1)
+		notifier := NewAsyncHttpRequestsSender(httpReqSenderMock, 1)
 
-		asyncNotifier, ok := notifier.(*AsyncHttpNotifier)
+		asyncNotifier, ok := notifier.(*asyncHttpRequestsSender)
 
 		if !ok {
 			t.Fatalf("notifier is of unexpected type")
@@ -42,9 +41,10 @@ func TestSendHttpRequestAsync(t *testing.T) {
 		url := "test-url"
 		httpReqSenderMock := mocks.NewMockHttpRequestSender(ctrl)
 
-		notifier := NewAsyncHttpNotifier(url, httpReqSenderMock, 1)
+		notifier := NewAsyncHttpRequestsSender(httpReqSenderMock, 1)
 
 		request := models.AsyncHttpRequest{
+			Url:     url,
 			Body:    nil,
 			Headers: nil,
 			ResultHandler: func(resp *http.Response, err error) {
@@ -64,10 +64,9 @@ func TestSendHttpRequestAsync(t *testing.T) {
 
 	t.Run("given a request missing some required fields, returns error", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
-		url := "test-url"
 		httpReqSenderMock := mocks.NewMockHttpRequestSender(ctrl)
 
-		notifier := NewAsyncHttpNotifier(url, httpReqSenderMock, 1)
+		notifier := NewAsyncHttpRequestsSender(httpReqSenderMock, 1)
 
 		request := models.AsyncHttpRequest{}
 
@@ -75,16 +74,17 @@ func TestSendHttpRequestAsync(t *testing.T) {
 		assert.Error(t, actualResult)
 	})
 
-	t.Run("given a valid request, passes validation, calls result handler with result, returns no error", func(t *testing.T) {
+	t.Run("given a valid request that passes validation, should call result handler with result and returns no error", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		url := "test-url"
 		httpReqSenderMock := mocks.NewMockHttpRequestSender(ctrl)
 
-		notifier := NewAsyncHttpNotifier(url, httpReqSenderMock, 1)
+		notifier := NewAsyncHttpRequestsSender(httpReqSenderMock, 1)
 
 		isCalled := false
 
 		request := models.AsyncHttpRequest{
+			Url:     url,
 			Body:    nil,
 			Headers: nil,
 			ResultHandler: func(resp *http.Response, err error) {

@@ -10,15 +10,15 @@ type HttpRequestSender interface {
 	SendHttpRequest(method, url string, headers map[string]string, body io.Reader) (resp *http.Response, err error)
 }
 
-type DirectHttpRequestSender struct {
+type directHttpRequestSender struct {
 	client http.Client
 }
 
 func NewHttpRequestSender(httpClient http.Client) HttpRequestSender {
-	return &DirectHttpRequestSender{client: httpClient}
+	return &directHttpRequestSender{client: httpClient}
 }
 
-func (sender DirectHttpRequestSender) SendHttpRequest(method, url string, headers map[string]string, body io.Reader) (resp *http.Response, err error) {
+func (sender directHttpRequestSender) SendHttpRequest(method, url string, headers map[string]string, body io.Reader) (resp *http.Response, err error) {
 	client := http.Client{}
 	request, err := http.NewRequest(method, url, body)
 

@@ -11,25 +11,23 @@ type AsyncHttpRequestSender interface {
 	SendHttpRequestAsync(request models.AsyncHttpRequest) error
 }
 
-type AsyncHttpNotifier struct {
+type asyncHttpRequestsSender struct {
 	httpSender               HttpRequestSender
 	pendingHttpRequestsQueue chan models.AsyncHttpRequest
 	numberOfWorkerRoutines   int
 	wg                       sync.WaitGroup
-	url                      string
 }
 
-func (a *AsyncHttpNotifier) ShutDown() {
+func (a *asyncHttpRequestsSender) ShutDown() {
 	close(a.pendingHttpRequestsQueue)
 }
 
-func NewAsyncHttpNotifier(url string, sender HttpRequestSender, numberOfWorkerRoutines int) AsyncHttpRequestSender {
+func NewAsyncHttpRequestsSender(sender HttpRequestSender, numberOfWorkerRoutines int) AsyncHttpRequestSender {
 
-	result := &AsyncHttpNotifier{
+	result := &asyncHttpRequestsSender{
 		httpSender:               sender,
 		pendingHttpRequestsQueue: make(chan models.AsyncHttpRequest, numberOfWorkerRoutines+1),
 		numberOfWorkerRoutines:   numberOfWorkerRoutines,
-		url:                      url,
 	}
 
 	result.startChannelProcessingUsingMultipleGoRoutines()
@@ -37,7 +35,7 @@ func NewAsyncHttpNotifier(url string, sender HttpRequestSender, numberOfWorkerRo
 	return result
 }
 
-func (a *AsyncHttpNotifier) startChannelProcessingUsingMultipleGoRoutines() {
+func (a *asyncHttpRequestsSender) startChannelProcessingUsingMultipleGoRoutines() {
 	go func() {
 		// This starts x number of goroutines that wait for something to do
 		a.wg.Add(a.numberOfWorkerRoutines)
@@ -45,10 +43,10 @@ func (a *AsyncHttpNotifier) startChannelProcessingUsingMultipleGoRoutines() {
 		for i := 0; i < a.numberOfWorkerRoutines; i++ {
 			go func() {
 				for {
-					pendingRequest, ok := <-a.pendingHttpRequestsQueue
+					pendingRequest, isOpen := <-a.pendingHttpRequestsQueue
 
 					// if there is nothing to do and the channel has been closed then end the goroutine
-					if !ok {
+					if !isOpen {
 						a.wg.Done()
 						return
 					}
@@ -64,7 +62,7 @@ func (a *AsyncHttpNotifier) startChannelProcessingUsingMultipleGoRoutines() {
 	}()
 }
 
-func (a *AsyncHttpNotifier) SendHttpRequestAsync(request models.AsyncHttpRequest) (err error) {
+func (a *asyncHttpRequestsSender) SendHttpRequestAsync(request models.AsyncHttpRequest) (err error) {
 
 	err = validateHttpRequest(request)
 
@@ -78,8 +76,8 @@ func (a *AsyncHttpNotifier) SendHttpRequestAsync(request models.AsyncHttpRequest
 	return
 }
 
-func (a *AsyncHttpNotifier) processQueuedHttpRequestAsync(request models.AsyncHttpRequest) {
-	resp, err := a.httpSender.SendHttpRequest(request.Method, a.url, request.Headers, request.Body)
+func (a *asyncHttpRequestsSender) processQueuedHttpRequestAsync(request models.AsyncHttpRequest) {
+	resp, err := a.httpSender.SendHttpRequest(request.Method, request.Url, request.Headers, request.Body)
 
 	//call the resp handler and pass the results
 	request.ResultHandler(resp, err)
